@@ -386,7 +386,7 @@ jobs:
         name: set up python
         uses: actions/setup-python@v6
         with:
-          python-version: 3.12
+          python-version: 3.13
 
       - name: install rust nightly
         uses: dtolnay/rust-toolchain@master
@@ -418,7 +418,7 @@ jobs:
         run: pip install --upgrade pip maturin
 
       - name: build wheels
-        run: maturin build --release --target wasm32-unknown-emscripten --out dist -i 3.12
+        run: maturin build --release --target wasm32-unknown-emscripten --out dist -i 3.13
         working-directory: crates/jiter-python
 
       - name: set up node (only when needed for npm tests)
