@@ -29,7 +29,7 @@ jobs:
   test:
     if: false
     needs: [resolve]
-    name: test rust-${{ matrix.rust-version }} on ${{ matrix.runs-on }}, Python ${{ matrix.python-version }}
+    name: test
     strategy:
       fail-fast: false
       matrix:
@@ -90,22 +90,18 @@ jobs:
 
   test-python:
     if: false
-    name: test jiter-python ${{ matrix.python-version }}
-
+    name: test jiter-python
     runs-on: ubuntu-latest
-
     strategy:
       fail-fast: false
       matrix:
         python-version: ["3.13", "3.13t", "graalpy-25.0"]
-
     env:
       RUNS_ON: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v5
 
-      - name: set up python ${{ matrix.python-version }}
+      - name: set up python
         uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
@@ -168,7 +164,7 @@ jobs:
 
   fuzz:
     if: false
-    name: fuzz on ${{ matrix.runs-on }}
+    name: fuzz
     strategy:
       fail-fast: false
       matrix:
@@ -185,28 +181,21 @@ jobs:
       - if: steps.cache-rust.outputs.cache-hit != 'true'
         run: cargo install cargo-fuzz
       - run: |
-          # cargo fuzz defaults to musl targets, which is seeming incomatible with sanitizers according to CI failures
           RUST_TARGET=$(rustc -Vv | grep host | cut -d ' ' -f 2)
           cargo fuzz run --target=$RUST_TARGET --fuzz-dir crates/fuzz compare_to_serde --release -- -max_total_time=300s
 
   fuzz-skip:
     if: false
     name: fuzz skip
-    # we only run this on ubuntu since architecture should make no difference
-
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v5
-
       - uses: dtolnay/rust-toolchain@nightly
       - id: cache-rust
         uses: Swatinem/rust-cache@v2
       - if: steps.cache-rust.outputs.cache-hit != 'true'
         run: cargo install cargo-fuzz
-
       - run: |
-          # cargo fuzz defaults to musl targets, which is seeming incomatible with sanitizers according to CI failures
           RUST_TARGET=$(rustc -Vv | grep host | cut -d ' ' -f 2)
           cargo fuzz run --target=$RUST_TARGET --fuzz-dir crates/fuzz compare_skip --release -- -max_total_time=300s
 
@@ -339,7 +328,7 @@ jobs:
 
   build-pgo:
     if: false
-    name: build pgo-optimized on ${{ matrix.platform.os }} / ${{ matrix.interpreter }}
+    name: build pgo
     strategy:
       fail-fast: false
       matrix:
@@ -388,7 +377,6 @@ jobs:
           path: crates/jiter-python/dist
 
   build-wasm-emscripten:
-    # only run on push to main and on release
     if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main' || contains(github.event.pull_request.labels.*.name, 'Full Build')
     runs-on: ubuntu-latest
     steps:
@@ -416,14 +404,13 @@ jobs:
           EMSDK_DIR="$RUNNER_TEMP/emsdk"
           git clone --depth=1 https://github.com/emscripten-core/emsdk.git "$EMSDK_DIR"
           cd "$EMSDK_DIR"
-          # pin the version you want; example: 3.1.73
           ./emsdk install 3.1.73
           ./emsdk activate 3.1.73
-          # load the environment for this step, then expose useful variables for subsequent steps
+          # load emsdk for this step
           source ./emsdk_env.sh
+          # persist variables and add emscripten tools + emsdk node bin for subsequent steps
           echo "EMSDK=$EMSDK" >> $GITHUB_ENV
           echo "EMSDK_NODE=$EMSDK_NODE" >> $GITHUB_ENV
-          # ensure emscripten tools and node from emsdk are on PATH for subsequent steps
           echo "$EMSDK/upstream/emscripten" >> $GITHUB_PATH
           echo "$(dirname "$EMSDK_NODE")" >> $GITHUB_PATH
 
@@ -441,8 +428,12 @@ jobs:
 
       - name: npm install & run JS tests
         run: |
-          npm ci
-          npm run test
+          # use npm ci when a lockfile exists; otherwise fall back to npm install
+          if [ -f package-lock.json ] || [ -f npm-shrinkwrap.json ]; then
+            npm ci
+          else
+            npm install
+          fi
         working-directory: crates/jiter-python
 
       - run: |
@@ -459,10 +450,8 @@ jobs:
     if: false
     needs: [build, build-sdist, build-pgo]
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v5
-
       - name: get dist artifacts
         uses: actions/download-artifact@v4
         with:
@@ -489,10 +478,9 @@ jobs:
 
   test-builds-arch:
     if: false
-    name: test build on ${{ matrix.target }}-${{ matrix.distro }}
+    name: test build on arch
     needs: [build]
     runs-on: ubuntu-latest
-
     strategy:
       fail-fast: false
       matrix:
@@ -501,17 +489,14 @@ jobs:
         include:
           - target: aarch64
             distro: alpine_latest
-
     steps:
       - uses: actions/checkout@v5
-
       - name: get dist artifacts
         uses: actions/download-artifact@v4
         with:
           pattern: pypi_files_linux_*
           merge-multiple: true
           path: crates/jiter-python/dist
-
       - uses: uraimo/run-on-arch-action@v2
         name: install & test
         with:
@@ -521,11 +506,9 @@ jobs:
           install: |
             set -x
             if command -v apt-get &> /dev/null; then
-              echo "installing python & pip with apt-get..."
               apt-get update
               apt-get install -y --no-install-recommends python3 python3-pip python3-venv git
             else
-              echo "installing python & pip with apk..."
               apk update
               apk add python3 py3-pip git
             fi
@@ -541,30 +524,25 @@ jobs:
 
   test-builds-os:
     if: false
-    name: test build on ${{ matrix.os }}
+    name: test build on os
     needs: [build, build-pgo]
-
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu, macos, windows]
-
     runs-on: ${{ matrix.os }}-latest
     steps:
       - uses: actions/checkout@v5
-
       - name: set up python
         uses: actions/setup-python@v6
         with:
           python-version: "3.13"
-
       - name: get dist artifacts
         uses: actions/download-artifact@v4
         with:
           pattern: pypi_files_*
           merge-multiple: true
           path: crates/jiter-python/dist
-
       - name: run tests
         run: |
           python3 -m pip install --upgrade pip -r tests/requirements.txt
@@ -588,15 +566,11 @@ jobs:
     needs: [check]
     runs-on: ubuntu-latest
     environment: release
-
     steps:
       - uses: actions/checkout@v5
-
       - name: install rust stable
         uses: dtolnay/rust-toolchain@stable
-
       - uses: Swatinem/rust-cache@v2
-
       - run: cargo publish -p jiter
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
@@ -610,15 +584,12 @@ jobs:
     permissions:
       id-token: write
       contents: write
-
     steps:
       - uses: actions/checkout@v5
-
       - name: set up python
         uses: actions/setup-python@v6
         with:
           python-version: "3.13"
-
       - name: get wasm dist artifacts
         uses: actions/download-artifact@v4
         with:
