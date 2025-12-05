@@ -227,7 +227,7 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
-      - uses: pre-commit/action@v3.0.1
+      - uses: pre-commit/action@v3.0.01
         with:
           extra_args: --all-files --verbose
         env:
@@ -259,7 +259,7 @@ jobs:
 
   build:
     if: false
-    name: build on ${{ matrix.os }} (${{ matrix.target }} - ${{ matrix.interpreter || 'all' }}${{ matrix.os == 'linux' && format(' - {0}', matrix.manylinux == 'auto' && 'manylinux' || matrix.many[...]
+    name: build
     strategy:
       fail-fast: false
       matrix:
@@ -414,17 +414,18 @@ jobs:
         run: |
           set -euo pipefail
           EMSDK_DIR="$RUNNER_TEMP/emsdk"
-          git clone https://github.com/emscripten-core/emsdk.git "$EMSDK_DIR"
+          git clone --depth=1 https://github.com/emscripten-core/emsdk.git "$EMSDK_DIR"
           cd "$EMSDK_DIR"
           # pin the version you want; example: 3.1.73
           ./emsdk install 3.1.73
           ./emsdk activate 3.1.73
-          # source the environment for this step and then expose key dirs for subsequent steps
+          # load the environment for this step, then expose useful variables for subsequent steps
           source ./emsdk_env.sh
-          # export the emscripten and node bin directories for the rest of the job
-          echo "${EMSDK}/upstream/emscripten" >> $GITHUB_PATH
-          echo "$(dirname "${EMSDK_NODE}")" >> $GITHUB_PATH
-          echo "EMSDK=${EMSDK}" >> $GITHUB_ENV
+          echo "EMSDK=$EMSDK" >> $GITHUB_ENV
+          echo "EMSDK_NODE=$EMSDK_NODE" >> $GITHUB_ENV
+          # ensure emscripten tools and node from emsdk are on PATH for subsequent steps
+          echo "$EMSDK/upstream/emscripten" >> $GITHUB_PATH
+          echo "$(dirname "$EMSDK_NODE")" >> $GITHUB_PATH
 
       - name: install deps
         run: pip install --upgrade pip maturin
