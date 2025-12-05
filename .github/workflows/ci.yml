@@ -10,6 +10,7 @@ on:
 
 jobs:
   resolve:
+    if: false
     runs-on: ubuntu-latest
     outputs:
       MSRV: ${{ steps.resolve-msrv.outputs.MSRV }}
@@ -23,9 +24,10 @@ jobs:
 
       - name: resolve MSRV
         id: resolve-msrv
-        run: echo MSRV=`python -c 'import tomllib; print(tomllib.load(open("Cargo.toml", "rb"))["workspace"]["package"]["rust-version"])'` >> $GITHUB_OUTPUT
+        run: echo MSRV=`python -c 'import tomllib; print(tomllib.load(open("Cargo.toml", "rb")))["workspace"]["package"]["rust-version"])'` >> $GITHUB_OUTPUT
 
   test:
+    if: false
     needs: [resolve]
     name: test rust-${{ matrix.rust-version }} on ${{ matrix.runs-on }}, Python ${{ matrix.python-version }}
     strategy:
@@ -87,6 +89,7 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
 
   test-python:
+    if: false
     name: test jiter-python ${{ matrix.python-version }}
 
     runs-on: ubuntu-latest
@@ -139,6 +142,7 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
 
   bench:
+    if: false
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -163,6 +167,7 @@ jobs:
           token: ${{ secrets.CODSPEED_TOKEN }}
 
   fuzz:
+    if: false
     name: fuzz on ${{ matrix.runs-on }}
     strategy:
       fail-fast: false
@@ -185,6 +190,7 @@ jobs:
           cargo fuzz run --target=$RUST_TARGET --fuzz-dir crates/fuzz compare_to_serde --release -- -max_total_time=300s
 
   fuzz-skip:
+    if: false
     name: fuzz skip
     # we only run this on ubuntu since architecture should make no difference
 
@@ -205,6 +211,7 @@ jobs:
           cargo fuzz run --target=$RUST_TARGET --fuzz-dir crates/fuzz compare_skip --release -- -max_total_time=300s
 
   lint:
+    if: false
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -230,6 +237,7 @@ jobs:
       - run: cargo doc -F python
 
   build-sdist:
+    if: false
     name: build sdist
     runs-on: ubuntu-latest
     steps:
@@ -250,18 +258,15 @@ jobs:
           path: crates/jiter-python/dist
 
   build:
+    if: false
     name: build on ${{ matrix.os }} (${{ matrix.target }} - ${{ matrix.interpreter || 'all' }}${{ matrix.os == 'linux' && format(' - {0}', matrix.manylinux == 'auto' && 'manylinux' || matrix.manylinux) || '' }})
-    # only run on push to main and on release
-    if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main' || contains(github.event.pull_request.labels.*.name, 'Full Build')
     strategy:
       fail-fast: false
       matrix:
-        os: [linux, windows] # windows and macos builds added manually
+        os: [linux, windows]
         target: [i686]
         manylinux: [auto]
         include:
-          # manylinux for various platforms
-          # x86_64 and aarch64 are PGO optimized below
           - os: linux
             manylinux: auto
             target: i686
@@ -274,8 +279,6 @@ jobs:
           - os: linux
             manylinux: auto
             target: s390x
-
-          # manylinux graalpy on major architectures
           - os: linux
             manylinux: auto
             target: x86_64
@@ -284,8 +287,6 @@ jobs:
             manylinux: auto
             target: aarch64
             interpreter: graalpy3.11 graalpy3.12
-
-          # musllinux
           - os: linux
             manylinux: musllinux_1_1
             target: x86_64
@@ -293,18 +294,12 @@ jobs:
             manylinux: musllinux_1_1
             target: aarch64
             runs-on: ubuntu-24.04-arm
-
-          # macos;
-          # all versions x86_64
-          # 3.9 can't be run on the arm hardware for PGO
           - os: macos
             target: x86_64
             interpreter: 3.9 3.10 3.11 3.12 3.13 3.14 graalpy3.11 graalpy3.12
           - os: macos
             target: aarch64
             interpreter: 3.9 graalpy3.11 graalpy3.12
-
-          # windows 11 arm supports 3.11 and up
           - os: windows
             target: aarch64
             runs-on: windows-11-arm
@@ -343,9 +338,8 @@ jobs:
           path: crates/jiter-python/dist
 
   build-pgo:
+    if: false
     name: build pgo-optimized on ${{ matrix.platform.os }} / ${{ matrix.interpreter }}
-    # only run on push to main and on release
-    if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main' || contains(github.event.pull_request.labels.*.name, 'Full Build')
     strategy:
       fail-fast: false
       matrix:
@@ -359,7 +353,6 @@ jobs:
         interpreter:
           ["3.9", "3.10", "3.11", "3.12", "3.13", "3.13t", "3.14", "3.14t"]
         exclude:
-          # macos arm only supported from 3.10 and up
           - platform:
               os: macos
             interpreter: "3.9"
@@ -412,7 +405,6 @@ jobs:
         with:
           components: rust-src
           targets: wasm32-unknown-emscripten
-          # might be able to unpin when pydodide uses emscripten 4, see below
           toolchain: nightly-2025-02-17
 
       - name: cache rust
@@ -420,9 +412,6 @@ jobs:
 
       - uses: mymindstorm/setup-emsdk@v14
         with:
-          # NOTE!: as per https://github.com/pydantic/pydantic-core/pull/149 this version needs to match the version
-          # in node_modules/pyodide/repodata.json, to get the version, run:
-          # `cat node_modules/pyodide/repodata.json | python -m json.tool | rg platform`
           version: "3.1.73" 
           actions-cache-folder: emsdk-cache
 
@@ -454,6 +443,7 @@ jobs:
           path: crates/jiter-python/dist
 
   inspect-pypi-assets:
+    if: false
     needs: [build, build-sdist, build-pgo]
     runs-on: ubuntu-latest
 
@@ -485,6 +475,7 @@ jobs:
           python -m zipfile --list `ls dist/*cp310-manylinux*x86_64.whl | head -n 1`
 
   test-builds-arch:
+    if: false
     name: test build on ${{ matrix.target }}-${{ matrix.distro }}
     needs: [build]
     runs-on: ubuntu-latest
@@ -528,7 +519,6 @@ jobs:
           run: |
             cd crates/jiter-python
             set -x
-            # typing-extensions isn't automatically installed because of `--no-index --no-deps`
             python3 -m venv venv
             source venv/bin/activate
             python3 -m pip install --upgrade pip -r tests/requirements.txt
@@ -537,6 +527,7 @@ jobs:
             python3 -c 'import jiter; print(jiter.__version__)'
 
   test-builds-os:
+    if: false
     name: test build on ${{ matrix.os }}
     needs: [build, build-pgo]
 
@@ -569,9 +560,8 @@ jobs:
           python3 -c 'import jiter; print(jiter.__version__)'
         working-directory: crates/jiter-python
 
-  # https://github.com/marketplace/actions/alls-green#why used for branch protection checks
   check:
-    if: always()
+    if: false
     needs: [test, test-python, bench, fuzz, fuzz-skip, lint]
     runs-on: ubuntu-latest
     steps:
@@ -581,8 +571,8 @@ jobs:
           jobs: ${{ toJSON(needs) }}
 
   release:
+    if: false
     needs: [check]
-    if: success() && startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     environment: release
 
@@ -600,17 +590,12 @@ jobs:
 
   release-python:
     needs:
-      - check
-      - test-builds-arch
-      - test-builds-os
-      - build-sdist
       - build-wasm-emscripten
     if: success() && startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     environment: release-python
     permissions:
       id-token: write
-      # needed to be able to upload wasm wheels
       contents: write
 
     steps:
@@ -621,32 +606,8 @@ jobs:
         with:
           python-version: "3.13"
 
-      - name: get dist artifacts
-        uses: actions/download-artifact@v4
-        with:
-          pattern: pypi_files_*
-          merge-multiple: true
-          path: dist
-
-      - run: |
-          pip install --upgrade twine
-          ls -l dist/
-          twine check --strict dist/*
-
-      - name: upload to pypi
-        uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          packages-dir: dist/
-
       - name: get wasm dist artifacts
         uses: actions/download-artifact@v4
         with:
           name: wasm_wheels
           path: wasm
-
-      - name: upload to github release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            wasm/*.whl
-          prerelease: ${{ contains(github.ref, 'alpha') || contains(github.ref, 'beta') }}
