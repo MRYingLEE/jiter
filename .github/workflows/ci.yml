@@ -259,7 +259,7 @@ jobs:
 
   build:
     if: false
-    name: build on ${{ matrix.os }} (${{ matrix.target }} - ${{ matrix.interpreter || 'all' }}${{ matrix.os == 'linux' && format(' - {0}', matrix.manylinux == 'auto' && 'manylinux' || matrix.manylinux) || '' }})
+    name: build on ${{ matrix.os }} (${{ matrix.target }} - ${{ matrix.interpreter || 'all' }}${{ matrix.os == 'linux' && format(' - {0}', matrix.manylinux == 'auto' && 'manylinux' || matrix.many[...]
     strategy:
       fail-fast: false
       matrix:
@@ -410,10 +410,21 @@ jobs:
       - name: cache rust
         uses: Swatinem/rust-cache@v2
 
-      - uses: mymindstorm/setup-emsdk@v14
-        with:
-          version: "3.1.73" 
-          actions-cache-folder: emsdk-cache
+      - name: Install a pinned emsdk (explicit, non-Pyodide specific)
+        run: |
+          set -euo pipefail
+          EMSDK_DIR="$RUNNER_TEMP/emsdk"
+          git clone https://github.com/emscripten-core/emsdk.git "$EMSDK_DIR"
+          cd "$EMSDK_DIR"
+          # pin the version you want; example: 3.1.73
+          ./emsdk install 3.1.73
+          ./emsdk activate 3.1.73
+          # source the environment for this step and then expose key dirs for subsequent steps
+          source ./emsdk_env.sh
+          # export the emscripten and node bin directories for the rest of the job
+          echo "${EMSDK}/upstream/emscripten" >> $GITHUB_PATH
+          echo "$(dirname "${EMSDK_NODE}")" >> $GITHUB_PATH
+          echo "EMSDK=${EMSDK}" >> $GITHUB_ENV
 
       - name: install deps
         run: pip install --upgrade pip maturin
@@ -422,14 +433,15 @@ jobs:
         run: maturin build --release --target wasm32-unknown-emscripten --out dist -i 3.12
         working-directory: crates/jiter-python
 
-      - uses: actions/setup-node@v4
+      - name: set up node (only when needed for npm tests)
+        uses: actions/setup-node@v4
         with:
           node-version: "18"
 
-      - run: npm install
-        working-directory: crates/jiter-python
-
-      - run: npm run test
+      - name: npm install & run JS tests
+        run: |
+          npm ci
+          npm run test
         working-directory: crates/jiter-python
 
       - run: |
